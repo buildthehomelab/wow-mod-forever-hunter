@@ -71,3 +71,39 @@ ForeverHunter.PetScaling.FocusBonus = 51
 #
 
 ForeverHunter.PetScaling.PhysicalAbilityAPMultiplier = 2.0
+
+########################################
+# Lone Wolf
+#
+# WoW Forever's Marksmanship talent: 20% more damage while you don't have a pet out. Without a
+# client patch it can't be a talent you pick, so every hunter with enough points in
+# Marksmanship gets it. Players see it as a "Frenzy" buff.
+########################################
+
+#
+#    ForeverHunter.LoneWolf.Enable
+#        Description: Master switch. With 0, hunters lose the bonus and the buff within a
+#                     second.
+#        Default:     1
+#
+
+ForeverHunter.LoneWolf.Enable = 1
+
+#
+#    ForeverHunter.LoneWolf.DamagePercent
+#        Description: Extra damage, in percent, for all of the hunter's damage: shots, melee,
+#                     stings and traps. The buff's tooltip always says 20%, whatever this is set
+#                     to: the text comes from the client.
+#        Default:     20
+#
+
+ForeverHunter.LoneWolf.DamagePercent = 20
+
+#
+#    ForeverHunter.LoneWolf.MarksmanshipPoints
+#        Description: Talent points in Marksmanship, in the active spec, needed for Lone Wolf.
+#                     WoW Forever's talent needs 10 to pick. 0 gives it to every hunter.
+#        Default:     10
+#
+
+ForeverHunter.LoneWolf.MarksmanshipPoints = 10

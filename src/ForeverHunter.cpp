@@ -1,9 +1,11 @@
 /*
  * mod-forever-hunter
  *
- * Hunter changes. For now that's Season of Discovery-style pet scaling on top of AzerothCore's own. Stock AzerothCore already
- * gives hunter pets a share of the hunter's stamina, attack power, armor, resistances and hit.
- * This module adds what SoD's pet scaling has and 3.3.5 doesn't:
+ * Hunter changes: Season of Discovery-style pet scaling, and WoW Forever's Lone Wolf.
+ *
+ * Pet scaling. Stock AzerothCore already gives hunter pets a share of the hunter's stamina, attack
+ * power, armor, resistances and hit. This module adds what SoD's pet scaling has and 3.3.5
+ * doesn't:
  *
  *   - Crit: the pet gets the hunter's ranged crit chance, for auto attacks and special abilities.
  *   - Haste: the pet attacks faster by the hunter's ranged haste.
@@ -21,6 +23,15 @@
  * The ability bonus is a spell script on the physical pet abilities. It raises the ability's base
  * damage before the core adds its bonuses, so the pet's damage modifiers and crits apply to the
  * extra damage as well.
+ *
+ * Lone Wolf. In WoW Forever it's a Marksmanship talent: 20% more damage while you don't have a
+ * pet out. The 3.3.5 talent tree can't get a new talent without a client patch, so here every
+ * hunter with at least 10 points in Marksmanship (what the talent needs) gets it. The bonus rides
+ * on a third hidden stub, "Pet Scaling - Master Spell 01" (67552), which every hunter carries and
+ * which checks every second whether it should be on. So that players can see it, it also shows
+ * them "Frenzy" (37023), an NPC-only buff the client already has, whose tooltip reads "Physical
+ * damage dealt is increased by 20%". That buff is for show: its own effect is zeroed, and the
+ * hidden aura gives the bonus to every school of damage.
  *
  * Released under the MIT License.
  */
@@ -42,7 +53,13 @@ namespace
     constexpr uint32 SPELL_PET_SCALING_MASTER_07 = 67562; // Focus, pet haste
     constexpr uint32 SPELL_PET_SCALING_MASTER_08 = 67563; // Pet crit
 
+    constexpr uint32 SPELL_LONE_WOLF             = 67552; // Pet Scaling - Master Spell 01, renamed
+    constexpr uint32 SPELL_LONE_WOLF_BUFF        = 37023; // Frenzy, shown to the player
+
     constexpr int32 RECALCULATE_INTERVAL = 2 * IN_MILLISECONDS;
+    constexpr int32 LONE_WOLF_CHECK_INTERVAL = 1 * IN_MILLISECONDS;
+
+    constexpr uint8 TALENT_TAB_MARKSMANSHIP = 1; // Hunter tabs: 0 Beast Mastery, 1 Marksmanship, 2 Survival
 
     enum class HasteSource : uint8
     {
@@ -58,9 +75,89 @@ namespace
         HasteSource hasteSource = HasteSource::Rating;
         uint32 focusBonus = 51;
         float physicalAbilityAPMultiplier = 2.0f;
+
+        bool loneWolfEnabled = true;
+        uint32 loneWolfDamagePercent = 20;
+        uint32 loneWolfMarksmanshipPoints = 10;
     };
 
     Config config;
+
+    // Talent points the player has spent in one tree, in their active spec.
+    uint32 GetTalentPointsInTab(Player const* player, uint8 tabPage)
+    {
+        uint32 points = 0;
+        for (auto const& [spellId, talent] : player->GetTalentMap())
+        {
+            if (talent->State == PLAYERSPELL_REMOVED || !talent->IsInSpec(player->GetActiveSpec()))
+                continue;
+
+            TalentEntry const* talentInfo = sTalentStore.LookupEntry(talent->talentID);
+            if (!talentInfo)
+                continue;
+
+            TalentTabEntry const* tab = sTalentTabStore.LookupEntry(talentInfo->TalentTab);
+            if (!tab || tab->tabpage != tabPage)
+                continue;
+
+            for (uint8 rank = 0; rank < MAX_TALENT_RANK; ++rank)
+                if (talentInfo->RankID[rank] == spellId)
+                {
+                    points += rank + 1;
+                    break;
+                }
+        }
+        return points;
+    }
+
+    // Lone Wolf is on for a hunter with enough points in Marksmanship and no living pet out.
+    bool HasLoneWolf(Player const* player)
+    {
+        if (!config.loneWolfEnabled || player->getClass() != CLASS_HUNTER)
+            return false;
+
+        if (Pet* pet = player->GetPet(); pet && pet->IsAlive())
+            return false;
+
+        return GetTalentPointsInTab(player, TALENT_TAB_MARKSMANSHIP) >= config.loneWolfMarksmanshipPoints;
+    }
+
+    // Show or hide the Frenzy buff. It never expires, and its own damage effect is set to 0: the
+    // hidden Lone Wolf aura gives the real bonus.
+    void UpdateLoneWolfBuff(Player* player, bool show)
+    {
+        bool const shown = player->HasAura(SPELL_LONE_WOLF_BUFF, player->GetGUID());
+        if (!show)
+        {
+            if (shown)
+                player->RemoveAurasDueToSpell(SPELL_LONE_WOLF_BUFF, player->GetGUID());
+            return;
+        }
+
+        if (shown)
+            return;
+
+        Aura* buff = player->AddAura(SPELL_LONE_WOLF_BUFF, player);
+        if (!buff)
+            return;
+
+        buff->SetMaxDuration(-1);
+        buff->SetDuration(-1);
+        if (AuraEffect* effect = buff->GetEffect(EFFECT_0))
+        {
+            effect->ChangeAmount(0);
+            effect->SetCanBeRecalculated(false);
+        }
+        buff->SetNeedClientUpdateForTargets();
+    }
+
+    // The Frenzy buff mustn't be saved with the character: it would come back at login without the
+    // module keeping it right, or after the module is removed. Runs once the spells are loaded.
+    void MarkLoneWolfBuffUnsaved()
+    {
+        if (SpellInfo* spellInfo = const_cast<SpellInfo*>(sSpellMgr->GetSpellInfo(SPELL_LONE_WOLF_BUFF)))
+            spellInfo->AttributesCu |= SPELL_ATTR0_CU_AURA_CANNOT_BE_SAVED;
+    }
 
     // The hunter's ranged haste as a percentage, from the chosen sources.
     float GetRangedHaste(Player const* hunter)
@@ -186,13 +283,75 @@ class spell_hun_pet_sod_ability_ap : public SpellScript
     }
 };
 
+// 67552 - Pet Scaling - Master Spell 01, renamed Lone Wolf. Every hunter carries it, hidden; its
+// damage bonus is 0 unless Lone Wolf is on.
+class spell_hun_lone_wolf : public AuraScript
+{
+    PrepareAuraScript(spell_hun_lone_wolf);
+
+    Player* GetHunter() const
+    {
+        Unit* owner = GetUnitOwner();
+        return owner ? owner->ToPlayer() : nullptr;
+    }
+
+    void CalculateAmount(AuraEffect const* /*aurEff*/, int32& amount, bool& /*canBeRecalculated*/)
+    {
+        amount = 0;
+        if (Player* hunter = GetHunter(); hunter && HasLoneWolf(hunter))
+            amount = int32(config.loneWolfDamagePercent);
+    }
+
+    void CalcPeriodic(AuraEffect const* /*aurEff*/, bool& isPeriodic, int32& amplitude)
+    {
+        isPeriodic = true;
+        amplitude = LONE_WOLF_CHECK_INTERVAL;
+    }
+
+    // Catch pets being summoned, dismissed or killed, talent changes, spec swaps and config
+    // reloads, and keep the Frenzy buff in step with the bonus.
+    void HandlePeriodic(AuraEffect const* aurEff)
+    {
+        PreventDefaultAction();
+        AuraEffect* effect = GetEffect(aurEff->GetEffIndex());
+        effect->RecalculateAmount();
+
+        // Buffs go at death; the next check after resurrecting puts Frenzy back.
+        if (Player* hunter = GetHunter())
+            UpdateLoneWolfBuff(hunter, effect->GetAmount() > 0 && hunter->IsAlive());
+    }
+
+    void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (Player* hunter = GetHunter())
+            UpdateLoneWolfBuff(hunter, false);
+    }
+
+    void Register() override
+    {
+        DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_hun_lone_wolf::CalculateAmount, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
+        DoEffectCalcPeriodic += AuraEffectCalcPeriodicFn(spell_hun_lone_wolf::CalcPeriodic, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_hun_lone_wolf::HandlePeriodic, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
+        AfterEffectRemove += AuraEffectRemoveFn(spell_hun_lone_wolf::HandleRemove, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_DONE, AURA_EFFECT_HANDLE_REAL);
+    }
+};
+
 class ForeverHunterWorldScript : public WorldScript
 {
 public:
     ForeverHunterWorldScript() : WorldScript("ForeverHunterWorldScript") { }
 
+    void OnBeforeWorldInitialized() override
+    {
+        MarkLoneWolfBuffUnsaved();
+    }
+
     void OnAfterConfigLoad(bool /*reload*/) override
     {
+        config.loneWolfEnabled            = sConfigMgr->GetOption<bool>("ForeverHunter.LoneWolf.Enable", true);
+        config.loneWolfDamagePercent      = sConfigMgr->GetOption<uint32>("ForeverHunter.LoneWolf.DamagePercent", 20);
+        config.loneWolfMarksmanshipPoints = sConfigMgr->GetOption<uint32>("ForeverHunter.LoneWolf.MarksmanshipPoints", 10);
+
         config.enabled      = sConfigMgr->GetOption<bool>("ForeverHunter.PetScaling.Enable", true);
         config.critPercent  = sConfigMgr->GetOption<uint32>("ForeverHunter.PetScaling.CritPercent", 100);
         config.hastePercent = sConfigMgr->GetOption<uint32>("ForeverHunter.PetScaling.HastePercent", 100);
@@ -221,10 +380,26 @@ public:
     }
 };
 
+class ForeverHunterPlayerScript : public PlayerScript
+{
+public:
+    ForeverHunterPlayerScript() : PlayerScript("ForeverHunterPlayerScript", { PLAYERHOOK_ON_LOGIN }) { }
+
+    // Give every hunter the hidden Lone Wolf aura. It's passive, so it stays through death and
+    // isn't saved; each login adds it again. With Lone Wolf switched off it does nothing.
+    void OnPlayerLogin(Player* player) override
+    {
+        if (player->getClass() == CLASS_HUNTER && !player->HasAura(SPELL_LONE_WOLF))
+            player->AddAura(SPELL_LONE_WOLF, player);
+    }
+};
+
 void AddForeverHunterScripts()
 {
     new ForeverHunterWorldScript();
     new ForeverHunterPetScript();
+    new ForeverHunterPlayerScript();
     RegisterSpellScript(spell_hun_pet_sod_scaling);
     RegisterSpellScript(spell_hun_pet_sod_ability_ap);
+    RegisterSpellScript(spell_hun_lone_wolf);
 }

@@ -1,8 +1,8 @@
 # Forever Hunter
 
-An [AzerothCore](https://www.azerothcore.org/) (WotLK 3.3.5a) module for hunter changes. For now
-that's Season of Discovery-style pet scaling: hunter pets get more from the hunter's gear. No
-client patch needed.
+An [AzerothCore](https://www.azerothcore.org/) (WotLK 3.3.5a) module for hunter changes:
+Season of Discovery-style pet scaling, so hunter pets get more from the hunter's gear, and WoW
+Forever's Lone Wolf for Marksmanship hunters who play without a pet. No client patch needed.
 
 ## Pet scaling
 
@@ -32,6 +32,27 @@ client doesn't know them. The module's SQL gives them their effects in `spell_db
 them on every hunter pet when it's tamed, summoned or levels up, and a spell script works out the
 amounts from the hunter's stats.
 
+## Lone Wolf
+
+In WoW Forever, Lone Wolf is a Marksmanship talent: 20% more damage with all attacks while you
+don't have a pet out. It needs 10 points in Marksmanship.
+
+A 3.3.5 client can't show a new talent without a client patch, so here it isn't a talent you
+pick. **Every hunter with at least 10 points in Marksmanship** gets it whenever they have no
+living pet out: dismissed, stabled, dead or never summoned. Summon a pet and it's gone.
+
+- It adds 20% to all of the hunter's damage: shots, auto shot, melee, stings, traps.
+- The hunter sees it as a **Frenzy** buff with a red unholy-frenzy icon. Frenzy is a buff the
+  client already has; in the game Blizzard only gave it to an NPC (Moroes in Karazhan). Its tooltip
+  says "Physical damage dealt is increased by 20%", but the bonus covers every school, so Arcane
+  Shot, Serpent Sting and Explosive Shot get it too.
+- The buff can't be dispelled or spellstolen. Cancelling it by right-click does nothing: it comes
+  back within a second, and the bonus never went away.
+
+The bonus itself is on a hidden server-side aura every hunter carries: "Pet Scaling - Master Spell
+01" (67552), another empty stub, renamed "Lone Wolf" for GM aura lists. Once a second it checks
+the hunter's pet and talents, sets the bonus, and shows or hides Frenzy.
+
 ## Install
 
 Clone it into your AzerothCore `modules` folder **as `mod-forever-hunter`**, without the repo's
@@ -56,18 +77,23 @@ Pets that are already out get the bonuses the next time they're summoned.
 | `ForeverHunter.PetScaling.HasteSource` | `0` | `0`: haste rating only. `1`: all ranged haste (quiver, Rapid Fire, ...). |
 | `ForeverHunter.PetScaling.FocusBonus` | `51` | Extra maximum focus. `0` for none. |
 | `ForeverHunter.PetScaling.PhysicalAbilityAPMultiplier` | `2.0` | Multiplies the attack power share of physical pet abilities. `1.0` changes nothing; about `2.8` matches the magic abilities. |
+| `ForeverHunter.LoneWolf.Enable` | `1` | Lone Wolf on or off. |
+| `ForeverHunter.LoneWolf.DamagePercent` | `20` | Extra damage in percent. The buff's tooltip says 20% whatever this is. |
+| `ForeverHunter.LoneWolf.MarksmanshipPoints` | `10` | Marksmanship points needed. `0` gives it to every hunter. |
 
 ## Turning it off
 
-- **Everything:** set `ForeverHunter.PetScaling.Enable = 0` and reload the config (`.reload config`)
-  or restart. Within 2 seconds every pet loses the crit, haste, focus and ability bonuses; no
-  resummon needed.
-- **One part:** `CritPercent = 0`, `HastePercent = 0`, `FocusBonus = 0` or
-  `PhysicalAbilityAPMultiplier = 1.0` turns off just that part.
+Change the config and reload it (`.reload config`) or restart:
+
+- **Pet scaling:** `ForeverHunter.PetScaling.Enable = 0`. Within 2 seconds every pet loses the
+  crit, haste, focus and ability bonuses; no resummon needed. For one part only, set
+  `CritPercent = 0`, `HastePercent = 0`, `FocusBonus = 0` or `PhysicalAbilityAPMultiplier = 1.0`.
+- **Lone Wolf:** `ForeverHunter.LoneWolf.Enable = 0`. Within a second hunters lose the bonus and
+  the Frenzy buff.
 
 Nothing is saved on characters or pets, so turning it off leaves nothing behind. To remove the
 module for good, delete it, rebuild, and run `data/sql/uninstall/mod_forever_hunter_uninstall.sql`
-on the world database. That puts the two server-side spells back to the empty stubs AzerothCore
+on the world database. That puts the three server-side spells back to the empty stubs AzerothCore
 ships and removes the script bindings.
 
 ## Limits
@@ -80,3 +106,7 @@ ships and removes the script bindings.
 - Tendon Rip (spiders) is untouched and gets no attack power or spell power scaling at all, in
   stock AzerothCore too: it's Physical but only has a spell power coefficient, and pets only get
   spell power for magic schools.
+- Lone Wolf isn't a real talent: nobody can skip it, and it doesn't cost a talent point. A hunter
+  with 10+ Marksmanship points who dismisses their pet always gets it, in PvP too.
+- The WoW Forever beta reports the talent also costs a few percent of damage while a pet is out.
+  That isn't copied.
