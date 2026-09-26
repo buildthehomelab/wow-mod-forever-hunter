@@ -1,8 +1,11 @@
 # Forever Hunter
 
-An [AzerothCore](https://www.azerothcore.org/) (WotLK 3.3.5a) module for hunter changes:
-Season of Discovery-style pet scaling, so hunter pets get more from the hunter's gear, and WoW
-Forever's Lone Wolf for Marksmanship hunters who play without a pet. No client patch needed.
+An [AzerothCore](https://www.azerothcore.org/) (WotLK 3.3.5a) module for hunter changes. No
+client patch needed.
+
+- **Pet scaling**, Season of Discovery-style: hunter pets get more from the hunter's gear.
+- **Lone Wolf**, from WoW Forever: Marksmanship hunters deal 20% more damage without a pet out.
+- **Summon Hawk**, from WoW Forever: Beast Mastery hunters send hawks at their target.
 
 ## Pet scaling
 
@@ -38,8 +41,10 @@ In WoW Forever, Lone Wolf is a Marksmanship talent: 20% more damage with all att
 don't have a pet out. It needs 10 points in Marksmanship.
 
 A 3.3.5 client can't show a new talent without a client patch, so here it isn't a talent you
-pick. **Every hunter with at least 10 points in Marksmanship** gets it whenever they have no
-living pet out: dismissed, stabled, dead or never summoned. Summon a pet and it's gone.
+pick. **Every Marksmanship hunter** gets it whenever they have no living pet out: dismissed,
+stabled, dead or never summoned. Summon a pet and it's gone. Marksmanship hunter means at least
+10 points in Marksmanship, and more there than in either other tree (settings can drop the second
+part).
 
 - It adds 20% to all of the hunter's damage: shots, auto shot, melee, stings, traps.
 - The hunter sees it as a **Frenzy** buff with a red unholy-frenzy icon. Frenzy is a buff the
@@ -52,6 +57,36 @@ living pet out: dismissed, stabled, dead or never summoned. Summon a pet and it'
 The bonus itself is on a hidden server-side aura every hunter carries: "Pet Scaling - Master Spell
 01" (67552), another empty stub, renamed "Lone Wolf" for GM aura lists. Once a second it checks
 the hunter's pet and talents, sets the bonus, and shows or hides Frenzy.
+
+## Summon Hawk
+
+In WoW Forever, Summon Hawk is a Beast Mastery talent (15 points in the tree): a hawk dives at
+your target and keeps attacking it for 18 seconds. Up to two hawks can be out, and it shares a
+6 second cooldown with Arcane Shot, so every hawk costs a shot.
+
+Here **every Beast Mastery hunter** (15+ points in Beast Mastery, more than in either other
+tree) learns it; it shows up in the General tab of the spellbook. Drop below that and it's gone.
+
+- Target an enemy and press it. The hawk flies in from above the target and attacks it; when the
+  target dies it goes for your next target, and with nothing to fight it follows you. After 18
+  seconds it leaves.
+- Two hawks at most. A third replaces the one with the least time left.
+- **Cooldown:** 6 seconds, shared with Arcane Shot both ways. Both buttons show it.
+- **Cost:** 5% of base mana, like Arcane Shot.
+- **Range:** Arcane Shot's, Hawk Eye included, and it needs line of sight.
+- **Damage:** each hawk hits like a hunter pet of your level, with 30% of your ranged attack power
+  as its attack power, fixed when it's summoned. It gets your hit chance, and Unleashed Fury
+  (+3% damage per rank) and Ferocity (+2% crit per rank) work on it, as in WoW Forever. Bestial
+  Wrath, Frenzy and the other pet talents don't.
+- Hawks aren't pets: they don't turn off Lone Wolf, and they don't use the pet bar.
+
+**The button is "Swoop"**, a spell with a hawk icon and a bird sound that the client already has
+and nothing in the game uses. Its tooltip reads "Swoop down from a distant height to attack your
+target, dealing 648 damage to it"; the 648 is the client's own text and means nothing here. On
+the server it's rebuilt: it doesn't move you, it sends the hawk. Swoop has no cooldown or cost
+in the client's data, so the button shows no mana cost, and it isn't on the global cooldown.
+
+The hawk is a new creature (9500300) with the Fjord Hawk's model.
 
 ## Install
 
@@ -79,7 +114,16 @@ Pets that are already out get the bonuses the next time they're summoned.
 | `ForeverHunter.PetScaling.PhysicalAbilityAPMultiplier` | `2.0` | Multiplies the attack power share of physical pet abilities. `1.0` changes nothing; about `2.8` matches the magic abilities. |
 | `ForeverHunter.LoneWolf.Enable` | `1` | Lone Wolf on or off. |
 | `ForeverHunter.LoneWolf.DamagePercent` | `20` | Extra damage in percent. The buff's tooltip says 20% whatever this is. |
-| `ForeverHunter.LoneWolf.MarksmanshipPoints` | `10` | Marksmanship points needed. `0` gives it to every hunter. |
+| `ForeverHunter.LoneWolf.MarksmanshipPoints` | `10` | Marksmanship points needed. |
+| `ForeverHunter.LoneWolf.RequireMainTree` | `1` | `1`: Marksmanship must be the tree with the most points. `0`: the points are enough. |
+| `ForeverHunter.SummonHawk.Enable` | `1` | Summon Hawk on or off. |
+| `ForeverHunter.SummonHawk.BeastMasteryPoints` | `15` | Beast Mastery points needed. |
+| `ForeverHunter.SummonHawk.RequireMainTree` | `1` | `1`: Beast Mastery must be the tree with the most points. `0`: the points are enough. |
+| `ForeverHunter.SummonHawk.Duration` | `18000` | How long a hawk stays, in milliseconds. |
+| `ForeverHunter.SummonHawk.Cooldown` | `6000` | Cooldown shared with Arcane Shot, in milliseconds. `0` for none. |
+| `ForeverHunter.SummonHawk.MaxActive` | `2` | Hawks out at once. |
+| `ForeverHunter.SummonHawk.ManaCostPercent` | `5` | Mana cost as a percentage of base mana. |
+| `ForeverHunter.SummonHawk.AttackPowerPercent` | `30` | Share of the hunter's ranged AP each hawk gets. |
 
 ## Turning it off
 
@@ -90,11 +134,21 @@ Change the config and reload it (`.reload config`) or restart:
   `CritPercent = 0`, `HastePercent = 0`, `FocusBonus = 0` or `PhysicalAbilityAPMultiplier = 1.0`.
 - **Lone Wolf:** `ForeverHunter.LoneWolf.Enable = 0`. Within a second hunters lose the bonus and
   the Frenzy buff.
+- **Summon Hawk:** `ForeverHunter.SummonHawk.Enable = 0`. Within a second of being online,
+  hunters lose the spell; hawks already out stay until they expire.
 
-Nothing is saved on characters or pets, so turning it off leaves nothing behind. To remove the
-module for good, delete it, rebuild, and run `data/sql/uninstall/mod_forever_hunter_uninstall.sql`
-on the world database. That puts the three server-side spells back to the empty stubs AzerothCore
-ships and removes the script bindings.
+To remove the module for good: set the `Enable` settings to `0` first if you can, so hunters lose
+Summon Hawk as they log in. Then stop the worldserver, delete the module, rebuild, and run both
+uninstall files:
+
+- `data/sql/uninstall/mod_forever_hunter_uninstall_world.sql` on the world database puts the
+  three server-side spells back to the empty stubs AzerothCore ships, and removes the script
+  bindings and the hawk creature.
+- `data/sql/uninstall/mod_forever_hunter_uninstall_characters.sql` on the characters database
+  takes Summon Hawk (Swoop) off every character, their action bars and saved cooldowns. Without
+  it, hunters keep an unscripted Swoop that charges them at the target.
+
+Nothing else is saved on characters or pets.
 
 ## Limits
 
@@ -106,7 +160,9 @@ ships and removes the script bindings.
 - Tendon Rip (spiders) is untouched and gets no attack power or spell power scaling at all, in
   stock AzerothCore too: it's Physical but only has a spell power coefficient, and pets only get
   spell power for magic schools.
-- Lone Wolf isn't a real talent: nobody can skip it, and it doesn't cost a talent point. A hunter
-  with 10+ Marksmanship points who dismisses their pet always gets it, in PvP too.
+- Lone Wolf and Summon Hawk aren't real talents: nobody can skip them, and they don't cost a
+  talent point. Every Marksmanship hunter who dismisses their pet gets Lone Wolf, in PvP too.
+- Summon Hawk's tooltip is Swoop's, and the button shows no cost or cooldown until you use it.
+- WoW Forever doesn't publish the hawk's damage; 30% of ranged AP is a guess to tune.
 - The WoW Forever beta reports the talent also costs a few percent of damage while a pet is out.
   That isn't copied.

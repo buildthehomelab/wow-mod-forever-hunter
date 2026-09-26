@@ -76,8 +76,8 @@ ForeverHunter.PetScaling.PhysicalAbilityAPMultiplier = 2.0
 # Lone Wolf
 #
 # WoW Forever's Marksmanship talent: 20% more damage while you don't have a pet out. Without a
-# client patch it can't be a talent you pick, so every hunter with enough points in
-# Marksmanship gets it. Players see it as a "Frenzy" buff.
+# client patch it can't be a talent you pick, so every Marksmanship hunter gets it. Players see
+# it as a "Frenzy" buff.
 ########################################
 
 #
@@ -107,3 +107,83 @@ ForeverHunter.LoneWolf.DamagePercent = 20
 #
 
 ForeverHunter.LoneWolf.MarksmanshipPoints = 10
+
+#
+#    ForeverHunter.LoneWolf.RequireMainTree
+#        Description: 1: Marksmanship must also be the tree with the most points, so only
+#                     Marksmanship hunters get it, not a Beast Mastery or Survival hunter with 10
+#                     points in Marksmanship. 0: the points are enough.
+#        Default:     1
+#
+
+ForeverHunter.LoneWolf.RequireMainTree = 1
+
+########################################
+# Summon Hawk
+#
+# WoW Forever's Beast Mastery talent: send a hawk at your target that attacks it for 18 seconds,
+# up to 2 at once, on a 6 second cooldown shared with Arcane Shot. Without a client patch it
+# can't be a talent you pick, so every Beast Mastery hunter learns it. The button is "Swoop",
+# a spell the client already has: its tooltip talks about swooping down on your target and a
+# fixed amount of damage, but it sends a hawk.
+########################################
+
+#
+#    ForeverHunter.SummonHawk.Enable
+#        Description: Master switch. With 0, hunters lose Summon Hawk within a second; hawks
+#                     already out stay until they expire.
+#        Default:     1
+#
+
+ForeverHunter.SummonHawk.Enable = 1
+
+#
+#    ForeverHunter.SummonHawk.BeastMasteryPoints
+#    ForeverHunter.SummonHawk.RequireMainTree
+#        Description: Talent points in Beast Mastery, in the active spec, needed to have Summon
+#                     Hawk (WoW Forever's talent needs 15), and whether Beast Mastery must also be
+#                     the tree with the most points (1) or the points are enough (0).
+#        Default:     15, 1
+#
+
+ForeverHunter.SummonHawk.BeastMasteryPoints = 15
+ForeverHunter.SummonHawk.RequireMainTree = 1
+
+#
+#    ForeverHunter.SummonHawk.Duration
+#    ForeverHunter.SummonHawk.Cooldown
+#        Description: How long a hawk stays, and the cooldown shared with Arcane Shot, in
+#                     milliseconds. Cooldown 0 unlinks them and removes the cooldown.
+#        Default:     18000, 6000
+#
+
+ForeverHunter.SummonHawk.Duration = 18000
+ForeverHunter.SummonHawk.Cooldown = 6000
+
+#
+#    ForeverHunter.SummonHawk.MaxActive
+#        Description: Hawks a hunter can have out at once. Another one replaces the hawk with the
+#                     least time left.
+#        Default:     2
+#
+
+ForeverHunter.SummonHawk.MaxActive = 2
+
+#
+#    ForeverHunter.SummonHawk.ManaCostPercent
+#        Description: Mana cost as a whole percentage of base mana, like Arcane Shot's 5%. The
+#                     client shows no cost on the button.
+#        Default:     5
+#
+
+ForeverHunter.SummonHawk.ManaCostPercent = 5
+
+#
+#    ForeverHunter.SummonHawk.AttackPowerPercent
+#        Description: Share of the hunter's ranged attack power each hawk gets as attack power,
+#                     fixed when it's summoned. Hunter pets get 22%, Feral Spirit wolves about
+#                     30%. WoW Forever doesn't publish its number.
+#        Default:     30
+#
+
+ForeverHunter.SummonHawk.AttackPowerPercent = 30
