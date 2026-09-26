@@ -1,0 +1,73 @@
+[worldserver]
+
+########################################
+# mod-forever-hunter
+#
+# Hunter changes. For now, Season of Discovery-style pet scaling on top of AzerothCore's own:
+# hunter pets also get the hunter's crit and haste, more maximum focus, and physical pet
+# abilities get more from attack power. Changes apply to pets within 2 seconds of a config
+# reload.
+########################################
+
+#
+#    ForeverHunter.PetScaling.Enable
+#        Description: Master switch. With 0, pets lose the bonuses within 2 seconds.
+#        Default:     1
+#
+
+ForeverHunter.PetScaling.Enable = 1
+
+#
+#    ForeverHunter.PetScaling.CritPercent
+#        Description: Share of the hunter's ranged crit chance the pet gets, in percent, on top
+#                     of its own 5%. With 100, a hunter at 30% ranged crit gives the pet +30%, so
+#                     35% before talents. Rounded to whole percents.
+#        Default:     100
+#
+
+ForeverHunter.PetScaling.CritPercent = 100
+
+#
+#    ForeverHunter.PetScaling.HastePercent
+#        Description: Share of the hunter's ranged haste the pet gets as attack speed, in percent.
+#                     Rounded to whole percents.
+#        Default:     100
+#
+
+ForeverHunter.PetScaling.HastePercent = 100
+
+#
+#    ForeverHunter.PetScaling.HasteSource
+#        Description: Which ranged haste counts.
+#                     0 - Haste rating only.
+#                     1 - Everything that speeds up the hunter's ranged attacks: haste rating,
+#                         quiver and ammo pouch, Rapid Fire, Improved Aspect of the Hawk, Serpent's
+#                         Swiftness and so on. Much stronger: the quiver alone adds about 15%, and
+#                         Serpent's Swiftness, which already speeds up the pet, counts twice.
+#        Default:     0
+#
+
+ForeverHunter.PetScaling.HasteSource = 0
+
+#
+#    ForeverHunter.PetScaling.FocusBonus
+#        Description: Extra maximum focus for the pet, on top of its normal 100. SoD gives 51.
+#                     0 for none.
+#        Default:     51
+#
+
+ForeverHunter.PetScaling.FocusBonus = 51
+
+#
+#    ForeverHunter.PetScaling.PhysicalAbilityAPMultiplier
+#        Description: Multiplies how much the pet's physical abilities (Claw, Bite, Smack, Gore,
+#                     Monstrous Bite, Swipe, Snatch, Savage Rend, Ravage, Rake's first hit and
+#                     Demoralizing Screech) get from the pet's attack power. Stock 3.3.5 gives
+#                     them 7% of it, about 1.5% of the hunter's ranged attack power; magic pet
+#                     abilities like Lightning Breath get about 4.3%. With 2.0 the physical ones
+#                     get 14%, about 3.1%; about 2.8 makes them equal. 1.0 changes nothing.
+#                     Only hunter pets are affected, not NPCs using the same spells.
+#        Default:     2.0
+#
+
+ForeverHunter.PetScaling.PhysicalAbilityAPMultiplier = 2.0
