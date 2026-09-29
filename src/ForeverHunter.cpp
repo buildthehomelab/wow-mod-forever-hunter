@@ -280,6 +280,22 @@ namespace
                 }
     }
 
+    // Damage meters (Recount, Skada, Details) only credit a guardian's damage to its owner once the
+    // combat log has shown a SPELL_SUMMON for it, which the client makes from a spell's summon
+    // effect. Swoop's effect is a dummy here and the script summons the hawk itself, so send the
+    // log entry a summon spell would: Swoop, one summon effect, one target, the hawk.
+    void SendHawkSummonLog(Player* hunter, Creature* hawk)
+    {
+        WorldPacket data(SMSG_SPELLLOGEXECUTE, 8 + 4 + 4 + 4 + 4 + 8);
+        data << hunter->GetPackGUID();
+        data << uint32(SPELL_SUMMON_HAWK);
+        data << uint32(1);                   // effects
+        data << uint32(SPELL_EFFECT_SUMMON);
+        data << uint32(1);                   // targets
+        data << hawk->GetPackGUID();
+        hunter->SendMessageToSet(&data, true);
+    }
+
     // Send out a hawk at the target. A hunter can have a few out; a new one replaces the one with
     // the least time left.
     void SummonHawk(Player* hunter, Unit* target)
@@ -311,6 +327,8 @@ namespace
         hawk->SetDisableGravity(true);
         if (hawk->AI())
             hawk->AI()->AttackStart(target);
+
+        SendHawkSummonLog(hunter, hawk);
     }
 
     // Show or hide the Frenzy buff. It never expires, and its own damage effect is set to 0: the
