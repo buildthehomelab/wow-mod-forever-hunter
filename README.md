@@ -88,6 +88,13 @@ in the client's data, so the button shows no mana cost, and it isn't on the glob
 
 The hawk is a new creature (9500300) with the Fjord Hawk's model.
 
+## Requirements
+
+- [AzerothCore](https://github.com/azerothcore/azerothcore-wotlk) `master` (WotLK 3.3.5a)
+- A WoW 3.3.5a (12340) client
+- No client patch needed
+- The SQL in `data/sql/db-world` is applied to the world database on the next start
+
 ## Install
 
 Clone it into your AzerothCore `modules` folder **as `mod-forever-hunter`**, without the repo's
@@ -166,3 +173,24 @@ Nothing else is saved on characters or pets.
 - WoW Forever doesn't publish the hawk's damage; 30% of ranged AP is a guess to tune.
 - The WoW Forever beta reports the talent also costs a few percent of damage while a pet is out.
   That isn't copied.
+
+## Troubleshooting
+
+- **No Summon Hawk in the spellbook.** It needs `ForeverHunter.SummonHawk.BeastMasteryPoints`
+  points (15) in Beast Mastery, and by default that must be the tree with the most points. Look in
+  the General tab.
+- **No Frenzy buff.** Lone Wolf needs 10 Marksmanship points, a Marksmanship main tree and no
+  living pet out. Summoning a pet removes it.
+- **A pet has no new bonuses.** Pets that were already out get them the next time they're
+  summoned. If it still has none, check that `ForeverHunter.PetScaling.Enable` is `1` and that the
+  module's SQL has been applied to the world database.
+
+## Credits
+
+Author: [buildthehomelab](https://github.com/buildthehomelab)
+
+The design follows the WoW Forever private server ruleset. The code is original.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
