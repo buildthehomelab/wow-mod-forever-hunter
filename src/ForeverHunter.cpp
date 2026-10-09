@@ -248,7 +248,6 @@ namespace
         spellInfo->Effects[EFFECT_0].Effect = SPELL_EFFECT_DUMMY;
         spellInfo->Effects[EFFECT_1].Effect = SpellEffects(0); // no effect
         spellInfo->AttributesEx7 &= ~SPELL_ATTR7_ATTACK_ON_CHARGE_TO_UNIT;
-        spellInfo->AttributesCu &= ~SPELL_ATTR0_CU_CHARGE;
     }
 
     // Set up a new hawk's stats. Called from the guardian's stat setup, before the core adds it all
