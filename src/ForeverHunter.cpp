@@ -1,8 +1,8 @@
 /*
  * mod-forever-hunter
  *
- * Hunter changes: Season of Discovery-style pet scaling, and WoW Forever's Lone Wolf and Summon
- * Hawk.
+ * Hunter changes: Season of Discovery-style pet scaling, WoW Forever's Lone Wolf and Summon
+ * Hawk, and pets that don't start a second fight in a dungeon.
  *
  * Pet scaling. Stock AzerothCore already gives hunter pets a share of the hunter's stamina, attack
  * power, armor, resistances and hit. This module adds what SoD's pet scaling has and 3.3.5
@@ -42,11 +42,24 @@
  * (creature 9500300, the Fjord Hawk's model) appears above it and attacks. The hawk scales with
  * the hunter's ranged attack power and gets Unleashed Fury and Ferocity, as in WoW Forever.
  *
+ * Pet hold. The core sends a pet at whatever the client names in its pet command, which isn't
+ * always the mob the hunter meant: a target still selected, or a mob behind the one under the
+ * cursor. In a dungeon that is often the next pack. So in a dungeon or raid, while the hunter,
+ * the pet or anyone of the group in that instance is in combat, a pet command aimed at a mob
+ * that isn't in combat is dropped before the core sees it.
+ *
  * Released under the MIT License.
  */
 
+#include "CharmInfo.h"
+#include "Chat.h"
 #include "Config.h"
 #include "CreatureAI.h"
+#include "DataMap.h"
+#include "GameTime.h"
+#include "Group.h"
+#include "Map.h"
+#include "ObjectAccessor.h"
 #include "Opcodes.h"
 #include "Pet.h"
 #include "Player.h"
@@ -57,6 +70,7 @@
 #include "SpellScriptLoader.h"
 #include "TemporarySummon.h"
 #include "WorldPacket.h"
+#include "WorldSession.h"
 
 #include <algorithm>
 #include <array>
@@ -82,6 +96,22 @@ namespace
     // Beast Mastery talents that WoW Forever lets hawks share: 3% damage and 2% crit per rank.
     constexpr std::array<uint32, 5> TALENT_UNLEASHED_FURY = { 19616, 19617, 19618, 19619, 19620 };
     constexpr std::array<uint32, 5> TALENT_FEROCITY       = { 19598, 19599, 19600, 19601, 19602 };
+
+    // CMSG_PET_ACTION: uint64 pet GUID, uint32 action (its id, and its type in the top byte),
+    // uint64 target GUID.
+    constexpr std::size_t PET_ACTION_DATA_POS   = 8;
+    constexpr std::size_t PET_ACTION_TARGET_POS = PET_ACTION_DATA_POS + 4;
+    constexpr std::size_t PET_ACTION_SIZE       = PET_ACTION_TARGET_POS + 8;
+
+    // A hunter hammering the pet attack key gets the "won't start a new fight" line this often.
+    constexpr Milliseconds PET_HOLD_NOTICE_INTERVAL = 2s;
+
+    // When a hunter was last told the pet held back, and about which mob. Kept on the player.
+    struct PetHoldNotice : public DataMap::Base
+    {
+        ObjectGuid target;
+        Milliseconds sent = 0ms;
+    };
 
     constexpr int32 RECALCULATE_INTERVAL = 2 * IN_MILLISECONDS;
     constexpr int32 LONE_WOLF_CHECK_INTERVAL = 1 * IN_MILLISECONDS;
@@ -118,6 +148,8 @@ namespace
         uint32 hawkMaxActive = 2;
         uint32 hawkManaCostPercent = 5;
         uint32 hawkAttackPowerPercent = 30;
+
+        bool petHoldEnabled = true;
     };
 
     Config config;
@@ -248,6 +280,109 @@ namespace
         spellInfo->Effects[EFFECT_0].Effect = SPELL_EFFECT_DUMMY;
         spellInfo->Effects[EFFECT_1].Effect = SpellEffects(0); // no effect
         spellInfo->AttributesEx7 &= ~SPELL_ATTR7_ATTACK_ON_CHARGE_TO_UNIT;
+    }
+
+    // The hunter, the pet or someone of the group in the same instance is in combat. A hunter
+    // who hasn't hit anything yet isn't in combat while the rest of the group already is, and
+    // that is when the pet gets sent.
+    bool IsGroupFighting(Player* hunter, Pet const* pet)
+    {
+        if (hunter->IsInCombat() || pet->IsInCombat())
+            return true;
+
+        if (Group* group = hunter->GetGroup())
+            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+                if (Player* member = itr->GetSource())
+                    if (member != hunter && member->IsInMap(hunter) && member->IsInCombat())
+                        return true;
+
+        return false;
+    }
+
+    // A mob that would be a new fight: alive, attackable and fighting nobody. A critter starts
+    // none. A totem or another summon is never in combat itself, so it's in the fight when its
+    // master is.
+    bool IsOutsideTheFight(Player const* hunter, Unit const* target)
+    {
+        Creature const* creature = target->ToCreature();
+        if (!creature || !creature->IsAlive() || creature->IsInCombat() || creature->IsCritter()
+            || !hunter->IsValidAttackTarget(creature))
+            return false;
+
+        Unit const* master = creature->GetCharmerOrOwner();
+        if (!master)
+            if (TempSummon const* summon = creature->ToTempSummon())
+                master = summon->GetSummonerUnit();
+
+        return !master || !master->IsInCombat();
+    }
+
+    // Tell the hunter why the pet didn't go, once per mob and then every couple of seconds.
+    void SendPetHoldNotice(Player* hunter, Unit const* target)
+    {
+        PetHoldNotice* notice = hunter->CustomData.GetDefault<PetHoldNotice>("ForeverHunterPetHoldNotice");
+        Milliseconds now = GameTime::GetGameTimeMS();
+        if (notice->target == target->GetGUID() && now - notice->sent < PET_HOLD_NOTICE_INTERVAL)
+            return;
+
+        notice->target = target->GetGUID();
+        notice->sent = now;
+        ChatHandler(hunter->GetSession()).SendNotification("Your pet won't start a new fight: {} is not in combat.", target->GetName());
+    }
+
+    // Whether this pet command would start a second fight: an attack, or one of the pet's
+    // abilities that it uses on an enemy, aimed at a mob that isn't in combat, in a dungeon or
+    // raid, while the group is fighting. Tells the hunter why the pet didn't go.
+    bool IsPetSentOutsideTheFight(WorldSession* session, WorldPacket const& packet)
+    {
+        if (packet.size() < PET_ACTION_SIZE)
+            return false;
+
+        Player* hunter = session->GetPlayer();
+        if (!hunter || !hunter->GetMap()->IsDungeon())
+            return false;
+
+        // Follow, stay, the stances and abilities without a target name nobody.
+        ObjectGuid targetGuid(packet.read<uint64>(PET_ACTION_TARGET_POS));
+        if (!targetGuid)
+            return false;
+
+        uint32 data = packet.read<uint32>(PET_ACTION_DATA_POS);
+        switch (UNIT_ACTION_BUTTON_TYPE(data))
+        {
+            case ACT_COMMAND:
+                if (UNIT_ACTION_BUTTON_ACTION(data) != COMMAND_ATTACK)
+                    return false;
+                break;
+            case ACT_PASSIVE:
+            case ACT_DISABLED:
+            case ACT_ENABLED:
+            {
+                // An ability can carry the hunter's target without being used on it (Dash,
+                // Cower). Only one the pet uses on an enemy sends the pet at that target.
+                SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(UNIT_ACTION_BUTTON_ACTION(data));
+                if (!spellInfo || spellInfo->IsPositive() || !spellInfo->NeedsExplicitUnitTarget())
+                    return false;
+                break;
+            }
+            default:
+                return false;
+        }
+
+        Pet* pet = hunter->GetPet();
+        if (!pet || !pet->IsHunterPet() || pet->GetGUID() != ObjectGuid(packet.read<uint64>(0)))
+            return false;
+
+        if (!IsGroupFighting(hunter, pet))
+            return false;
+
+        // A pet already on its way to this mob keeps going: the pull was started out of combat.
+        Unit* target = ObjectAccessor::GetUnit(*hunter, targetGuid);
+        if (!target || target == pet->GetVictim() || !IsOutsideTheFight(hunter, target))
+            return false;
+
+        SendPetHoldNotice(hunter, target);
+        return true;
     }
 
     // Set up a new hawk's stats. Called from the guardian's stat setup, before the core adds it all
@@ -701,6 +836,8 @@ public:
         config.hawkManaCostPercent    = sConfigMgr->GetOption<uint32>("ForeverHunter.SummonHawk.ManaCostPercent", 5);
         config.hawkAttackPowerPercent = sConfigMgr->GetOption<uint32>("ForeverHunter.SummonHawk.AttackPowerPercent", 30);
 
+        config.petHoldEnabled = sConfigMgr->GetOption<bool>("ForeverHunter.PetHold.Enable", true);
+
         config.enabled      = sConfigMgr->GetOption<bool>("ForeverHunter.PetScaling.Enable", true);
         config.critPercent  = sConfigMgr->GetOption<uint32>("ForeverHunter.PetScaling.CritPercent", 100);
         config.hastePercent = sConfigMgr->GetOption<uint32>("ForeverHunter.PetScaling.HastePercent", 100);
@@ -773,12 +910,29 @@ public:
     }
 };
 
+class ForeverHunterServerScript : public ServerScript
+{
+public:
+    ForeverHunterServerScript() : ServerScript("ForeverHunterServerScript", { SERVERHOOK_CAN_PACKET_RECEIVE }) { }
+
+    // Runs for every packet from every client, so bail out on the opcode first. Pet commands are
+    // handled on the map's own update, so the hunter, the pet and the target are safe to read.
+    bool CanPacketReceive(WorldSession* session, WorldPacket const& packet) override
+    {
+        if (!config.petHoldEnabled || packet.GetOpcode() != CMSG_PET_ACTION || !session)
+            return true;
+
+        return !IsPetSentOutsideTheFight(session, packet);
+    }
+};
+
 void AddForeverHunterScripts()
 {
     new ForeverHunterWorldScript();
     new ForeverHunterPetScript();
     new ForeverHunterPlayerScript();
     new ForeverHunterAllSpellScript();
+    new ForeverHunterServerScript();
     RegisterSpellScript(spell_hun_pet_sod_scaling);
     RegisterSpellScript(spell_hun_pet_sod_ability_ap);
     RegisterSpellScript(spell_hun_lone_wolf);
