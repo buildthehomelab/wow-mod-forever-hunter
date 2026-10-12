@@ -187,3 +187,15 @@ ForeverHunter.SummonHawk.ManaCostPercent = 5
 #
 
 ForeverHunter.SummonHawk.AttackPowerPercent = 30
+
+#
+#    ForeverHunter.PetHold.Enable
+#        Description: In a dungeon or raid, while the hunter, the pet or anyone of the group
+#                     in that instance is in combat, the pet ignores an attack command, or an
+#                     ability it uses on an enemy, aimed at a mob that isn't in combat, and the
+#                     hunter gets a line saying so. Critters, and totems and other summons of a
+#                     mob that is in combat, can still be attacked.
+#        Default:     1
+#
+
+ForeverHunter.PetHold.Enable = 1

@@ -6,6 +6,7 @@ client patch needed.
 - **Pet scaling**, Season of Discovery-style: hunter pets get more from the hunter's gear.
 - **Lone Wolf**, from WoW Forever: Marksmanship hunters deal 20% more damage without a pet out.
 - **Summon Hawk**, from WoW Forever: Beast Mastery hunters send hawks at their target.
+- **Pet hold**: in a dungeon or raid, a pet in a fight doesn't run off to start a second one.
 
 ## Pet scaling
 
@@ -88,6 +89,26 @@ in the client's data, so the button shows no mana cost, and it isn't on the glob
 
 The hawk is a new creature (9500300) with the Fjord Hawk's model.
 
+## Pet hold
+
+The server sends a pet at whatever enemy the client names in the pet command, and that isn't
+always the mob you meant: a target you still had selected, or a mob standing behind the one
+under the cursor. In a dungeon it is often the next pack.
+
+So in a dungeon or raid, while you, your pet or anyone of your group in that instance is in
+combat:
+
+- A pet attack, or a pet ability that is used on an enemy (Growl, Bite, a charge), is ignored
+  when the target isn't in combat. The pet keeps doing what it was doing, and you get "Your pet
+  won't start a new fight: (name) is not in combat."
+- Abilities the pet uses on itself or on you (Dash, Cower, Roar of Sacrifice) always work,
+  whatever you have targeted.
+- Critters, and totems and other summons of a mob that is in combat, can still be attacked.
+- To pull a second pack on purpose, hit it yourself first. Once it's in combat the pet goes.
+
+While nobody of the group is fighting nothing changes: you can still pull with the pet.
+Outside dungeons and raids nothing changes either. Only hunter pets are covered.
+
 ## Requirements
 
 - [AzerothCore](https://github.com/azerothcore/azerothcore-wotlk) `master` (WotLK 3.3.5a)
@@ -131,6 +152,7 @@ Pets that are already out get the bonuses the next time they're summoned.
 | `ForeverHunter.SummonHawk.MaxActive` | `2` | Hawks out at once. |
 | `ForeverHunter.SummonHawk.ManaCostPercent` | `5` | Mana cost as a percentage of base mana. |
 | `ForeverHunter.SummonHawk.AttackPowerPercent` | `30` | Share of the hunter's ranged AP each hawk gets. |
+| `ForeverHunter.PetHold.Enable` | `1` | In a dungeon or raid, while the group is fighting, a pet ignores commands aimed at mobs that aren't in combat. |
 
 ## Turning it off
 
@@ -143,6 +165,7 @@ Change the config and reload it (`.reload config`) or restart:
   the Frenzy buff.
 - **Summon Hawk:** `ForeverHunter.SummonHawk.Enable = 0`. Within a second of being online,
   hunters lose the spell; hawks already out stay until they expire.
+- **Pet hold:** `ForeverHunter.PetHold.Enable = 0`. Pets go where they're sent again at once.
 
 To remove the module for good: set the `Enable` settings to `0` first if you can, so hunters lose
 Summon Hawk as they log in. Then stop the worldserver, delete the module, rebuild, and run both
@@ -171,6 +194,15 @@ Nothing else is saved on characters or pets.
   talent point. Every Marksmanship hunter who dismisses their pet gets Lone Wolf, in PvP too.
 - Summon Hawk's tooltip is Swoop's, and the button shows no cost or cooldown until you use it.
 - WoW Forever doesn't publish the hawk's damage; 30% of ranged AP is a guess to tune.
+- Pet hold goes by the mob's own combat state. The rest of a pack joins a second or two after
+  the first mob is pulled; until then the pet won't go for them.
+- Pet hold counts the whole group in the instance: while the other half of a raid is fighting
+  somewhere else, you can't pull with the pet either.
+- A boss add that was summoned by something that isn't in combat itself (a portal, a trigger)
+  is refused until it has picked a target.
+- Pet hold only looks at your commands. A pet on Aggressive still picks its own targets, bot
+  hunters' pets aren't covered, and a pet can still pull a pack by running through it on the way
+  to its target, or by standing behind its target next to one.
 - The WoW Forever beta reports the talent also costs a few percent of damage while a pet is out.
   That isn't copied.
 
