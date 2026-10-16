@@ -48,6 +48,12 @@
  * the pet or anyone of the group in that instance is in combat, a pet command aimed at a mob
  * that isn't in combat is dropped before the core sees it.
  *
+ * Shadowstrike and Thunderstrike. The Molten Core polearm pair becomes a hunter weapon: Agility
+ * on both forms (see the SQL), and the procs come from ranged hits instead of melee swings.
+ * Thunderstrike's ranged hits can cast its Chain Lightning; Shadowstrike's make the hunter's pet
+ * drain life from the target, which heals the pet. A hidden server-only aura (90360) on every
+ * character does the proccing; it does nothing unless one of the two is in the main hand.
+ *
  * Released under the MIT License.
  */
 
@@ -56,8 +62,10 @@
 #include "Config.h"
 #include "CreatureAI.h"
 #include "DataMap.h"
+#include "DBCStores.h"
 #include "GameTime.h"
 #include "Group.h"
+#include "Item.h"
 #include "Map.h"
 #include "ObjectAccessor.h"
 #include "Opcodes.h"
@@ -92,6 +100,13 @@ namespace
     constexpr uint32 SPELL_HUNTER_PET_SCALING_04 = 61017; // The core's hit and expertise scaling
     constexpr uint32 NPC_HAWK                    = 9500300;
     constexpr uint32 SUMMON_PROPERTIES_GUARDIAN  = 61;    // Ally guardian, no pet bar
+
+    constexpr uint32 SPELL_SHADOWSTRIKE_RANGED   = 90360; // Hidden ranged proc aura, server-only
+    constexpr uint32 SPELL_DRAIN_LIFE            = 21170; // Shadowstrike's stock proc, 100-180
+    constexpr uint32 SPELL_CHAIN_LIGHTNING       = 21179; // Thunderstrike's stock proc, 150-250
+    constexpr uint32 ITEM_SHADOWSTRIKE           = 17074;
+    constexpr uint32 ITEM_THUNDERSTRIKE          = 17223;
+    constexpr uint32 SPELL_RANGE_100_YARDS       = 6;     // SpellRange.dbc
 
     // Beast Mastery talents that WoW Forever lets hawks share: 3% damage and 2% crit per rank.
     constexpr std::array<uint32, 5> TALENT_UNLEASHED_FURY = { 19616, 19617, 19618, 19619, 19620 };
@@ -150,6 +165,8 @@ namespace
         uint32 hawkAttackPowerPercent = 30;
 
         bool petHoldEnabled = true;
+
+        bool shadowstrikeEnabled = true;
     };
 
     Config config;
@@ -502,6 +519,42 @@ namespace
             spellInfo->AttributesCu |= SPELL_ATTR0_CU_AURA_CANNOT_BE_SAVED;
     }
 
+    // Thunderstrike's Chain Lightning has 30 yards of range, less than a hunter shoots from, and
+    // the core checks range on triggered spells too. Only the four Shadowstrike/Thunderstrike
+    // items cast it; their melee procs don't mind the longer range.
+    void ApplyChainLightningRange()
+    {
+        SpellInfo* spellInfo = const_cast<SpellInfo*>(sSpellMgr->GetSpellInfo(SPELL_CHAIN_LIGHTNING));
+        if (!spellInfo)
+            return;
+
+        if (SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(SPELL_RANGE_100_YARDS))
+            spellInfo->RangeEntry = range;
+    }
+
+    // Which form is in the main hand, if either: its entry, or 0.
+    uint32 GetEquippedStrikeForm(Player const* player)
+    {
+        Item const* weapon = player->GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+        if (!weapon)
+            return 0;
+
+        uint32 const entry = weapon->GetEntry();
+        return entry == ITEM_SHADOWSTRIKE || entry == ITEM_THUNDERSTRIKE ? entry : 0;
+    }
+
+    // Shadowstrike: the pet drains the target and heals itself. Drain Life heals whoever casts
+    // it, so the pet casts it. A pet that is dead, dismissed, out of range or out of sight of the
+    // target can't; then the hunter drains it, as the stock item did.
+    void CastShadowstrikeDrain(Player* hunter, Unit* target, AuraEffect const* aurEff)
+    {
+        if (Pet* pet = hunter->GetPet(); pet && pet->IsAlive() && pet->IsInMap(target)
+            && pet->CastSpell(target, SPELL_DRAIN_LIFE, true) == SPELL_CAST_OK)
+            return;
+
+        hunter->CastSpell(target, SPELL_DRAIN_LIFE, true, nullptr, aurEff);
+    }
+
     // The hunter's ranged haste as a percentage, from the chosen sources.
     float GetRangedHaste(Player const* hunter)
     {
@@ -809,6 +862,51 @@ class spell_hun_lone_wolf : public AuraScript
     }
 };
 
+// 90360 - Shadowstrike and Thunderstrike (mod-forever-hunter). Hidden, on every character; procs
+// on ranged hits (spell_proc sets the rate), but only with one of the two forms in the main hand.
+class spell_hun_shadowstrike_ranged : public AuraScript
+{
+    PrepareAuraScript(spell_hun_shadowstrike_ranged);
+
+    bool CheckProc(ProcEventInfo& eventInfo)
+    {
+        if (!config.shadowstrikeEnabled)
+            return false;
+
+        Player* player = GetTarget()->ToPlayer();
+        Unit* target = eventInfo.GetActionTarget();
+        return player && target && target != player && target->IsAlive() && GetEquippedStrikeForm(player);
+    }
+
+    void HandleProc(AuraEffect const* aurEff, ProcEventInfo& eventInfo)
+    {
+        PreventDefaultAction();
+
+        Player* player = GetTarget()->ToPlayer();
+        Unit* target = eventInfo.GetActionTarget();
+        if (!player || !target)
+            return;
+
+        switch (GetEquippedStrikeForm(player))
+        {
+            case ITEM_SHADOWSTRIKE:
+                CastShadowstrikeDrain(player, target, aurEff);
+                break;
+            case ITEM_THUNDERSTRIKE:
+                player->CastSpell(target, SPELL_CHAIN_LIGHTNING, true, nullptr, aurEff);
+                break;
+            default:
+                break;
+        }
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_hun_shadowstrike_ranged::CheckProc);
+        OnEffectProc += AuraEffectProcFn(spell_hun_shadowstrike_ranged::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
+    }
+};
+
 class ForeverHunterWorldScript : public WorldScript
 {
 public:
@@ -818,6 +916,7 @@ public:
     {
         MarkLoneWolfBuffUnsaved();
         ApplySummonHawkSpellChanges();
+        ApplyChainLightningRange();
     }
 
     void OnAfterConfigLoad(bool /*reload*/) override
@@ -837,6 +936,8 @@ public:
         config.hawkAttackPowerPercent = sConfigMgr->GetOption<uint32>("ForeverHunter.SummonHawk.AttackPowerPercent", 30);
 
         config.petHoldEnabled = sConfigMgr->GetOption<bool>("ForeverHunter.PetHold.Enable", true);
+
+        config.shadowstrikeEnabled = sConfigMgr->GetOption<bool>("ForeverHunter.Shadowstrike.Enable", true);
 
         config.enabled      = sConfigMgr->GetOption<bool>("ForeverHunter.PetScaling.Enable", true);
         config.critPercent  = sConfigMgr->GetOption<uint32>("ForeverHunter.PetScaling.CritPercent", 100);
@@ -879,10 +980,15 @@ class ForeverHunterPlayerScript : public PlayerScript
 public:
     ForeverHunterPlayerScript() : PlayerScript("ForeverHunterPlayerScript", { PLAYERHOOK_ON_LOGIN }) { }
 
-    // Give every hunter the hidden Lone Wolf aura. It's passive, so it stays through death and
-    // isn't saved; each login adds it again. With Lone Wolf switched off it does nothing.
+    // Give every hunter the hidden Lone Wolf aura, and everyone the hidden Shadowstrike aura: any
+    // class that can wield the polearm and shoot gets its ranged procs. Both are passive, so they
+    // stay through death and aren't saved; each login adds them again. Switched off in the
+    // config, they do nothing.
     void OnPlayerLogin(Player* player) override
     {
+        if (!player->HasAura(SPELL_SHADOWSTRIKE_RANGED))
+            player->AddAura(SPELL_SHADOWSTRIKE_RANGED, player);
+
         if (player->getClass() != CLASS_HUNTER)
             return;
 
@@ -937,5 +1043,6 @@ void AddForeverHunterScripts()
     RegisterSpellScript(spell_hun_pet_sod_ability_ap);
     RegisterSpellScript(spell_hun_lone_wolf);
     RegisterSpellScript(spell_hun_summon_hawk);
+    RegisterSpellScript(spell_hun_shadowstrike_ranged);
     RegisterCreatureAI(npc_forever_hunter_hawk);
 }
