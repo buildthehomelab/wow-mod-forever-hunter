@@ -532,6 +532,19 @@ namespace
             spellInfo->RangeEntry = range;
     }
 
+    bool IsStrikeForm(uint32 entry)
+    {
+        return entry == ITEM_SHADOWSTRIKE || entry == ITEM_THUNDERSTRIKE;
+    }
+
+    // The hidden proc aura. Added at login, and again whenever one of the two forms is equipped,
+    // so it comes back if something stripped it mid-session.
+    void EnsureStrikeAura(Player* player)
+    {
+        if (!player->HasAura(SPELL_SHADOWSTRIKE_RANGED))
+            player->AddAura(SPELL_SHADOWSTRIKE_RANGED, player);
+    }
+
     // Which form is in the main hand, if either: its entry, or 0.
     uint32 GetEquippedStrikeForm(Player const* player)
     {
@@ -539,16 +552,16 @@ namespace
         if (!weapon)
             return 0;
 
-        uint32 const entry = weapon->GetEntry();
-        return entry == ITEM_SHADOWSTRIKE || entry == ITEM_THUNDERSTRIKE ? entry : 0;
+        return IsStrikeForm(weapon->GetEntry()) ? weapon->GetEntry() : 0;
     }
 
     // Shadowstrike: the pet drains the target and heals itself. Drain Life heals whoever casts
-    // it, so the pet casts it. A pet that is dead, dismissed, out of range or out of sight of the
-    // target can't; then the hunter drains it, as the stock item did.
+    // it, so the pet casts it, but only on the mob it's already fighting: a pet on Passive or
+    // following must not pick up threat on something new. Otherwise (no pet, another target, out
+    // of range or sight) the hunter drains it, as the stock item did.
     void CastShadowstrikeDrain(Player* hunter, Unit* target, AuraEffect const* aurEff)
     {
-        if (Pet* pet = hunter->GetPet(); pet && pet->IsAlive() && pet->IsInMap(target)
+        if (Pet* pet = hunter->GetPet(); pet && pet->IsAlive() && pet->GetVictim() == target
             && pet->CastSpell(target, SPELL_DRAIN_LIFE, true) == SPELL_CAST_OK)
             return;
 
@@ -978,7 +991,13 @@ public:
 class ForeverHunterPlayerScript : public PlayerScript
 {
 public:
-    ForeverHunterPlayerScript() : PlayerScript("ForeverHunterPlayerScript", { PLAYERHOOK_ON_LOGIN }) { }
+    ForeverHunterPlayerScript() : PlayerScript("ForeverHunterPlayerScript", { PLAYERHOOK_ON_LOGIN, PLAYERHOOK_ON_EQUIP }) { }
+
+    void OnPlayerEquip(Player* player, Item* item, uint8 /*bag*/, uint8 /*slot*/, bool /*update*/) override
+    {
+        if (item && IsStrikeForm(item->GetEntry()))
+            EnsureStrikeAura(player);
+    }
 
     // Give every hunter the hidden Lone Wolf aura, and everyone the hidden Shadowstrike aura: any
     // class that can wield the polearm and shoot gets its ranged procs. Both are passive, so they
@@ -986,8 +1005,7 @@ public:
     // config, they do nothing.
     void OnPlayerLogin(Player* player) override
     {
-        if (!player->HasAura(SPELL_SHADOWSTRIKE_RANGED))
-            player->AddAura(SPELL_SHADOWSTRIKE_RANGED, player);
+        EnsureStrikeAura(player);
 
         if (player->getClass() != CLASS_HUNTER)
             return;

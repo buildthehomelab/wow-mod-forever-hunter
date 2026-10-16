@@ -119,7 +119,7 @@ two-handers of the same item level carry 45-55 stat points. Here it becomes a hu
 
 | Form | Stats | Ranged proc |
 |------|-------|-------------|
-| Shadowstrike | +30 Agility, +20 Stamina | Your pet drains 100-180 life from the target and is healed for it. With no pet in reach, you drain it. |
+| Shadowstrike | +30 Agility, +20 Stamina | Your pet drains 100-180 life from the target and is healed for it. Only a pet already fighting that target does it, so a pet on Passive never picks up threat; otherwise you drain it. |
 | Thunderstrike | +30 Agility, +10 hit rating | Chain Lightning: 150-250 Nature damage to up to 3 targets. |
 
 - The procs come from ranged hits, Auto Shot and shots, instead of melee swings: about 2 a
@@ -132,9 +132,9 @@ two-handers of the same item level carry 45-55 stat points. Here it becomes a hu
   spell power, which pets get from your ranged attack power.
 - Chain Lightning's range is raised to 100 yards on the server, so it reaches as far as you shoot.
 
-The procs ride on a hidden server-only aura (90360) every character gets at login; it does
-nothing unless one of the two forms is in the main hand. The client doesn't know the aura, so the
-proc is described in the item's yellow description line. Clients need their item cache
+The procs ride on a hidden server-only aura (90360) every character gets at login, and again when
+equipping either form; it does nothing unless one of the two forms is in the main hand. The
+client doesn't know the aura, so the proc is described in the item's yellow description line. Clients need their item cache
 (`Cache/WDB`) cleared to see the new stats.
 
 ## Requirements
@@ -239,6 +239,8 @@ Nothing else is saved on characters or pets.
 
 - Shadowstrike and Thunderstrike lose their melee procs: they're hunter weapons now. Any class
   that wields one and shoots a bow, gun or crossbow gets the ranged procs, though.
+- Chain Lightning jumps to nearby enemies, as in stock, so it can break a Freezing Trap or
+  Polymorph next to your target.
 - The Reclaimed and Reinforced versions (49301, 49302, 49496, 49497) are left as they are.
 
 ## Troubleshooting
