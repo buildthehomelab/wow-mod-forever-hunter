@@ -199,3 +199,16 @@ ForeverHunter.SummonHawk.AttackPowerPercent = 30
 #
 
 ForeverHunter.PetHold.Enable = 1
+
+#
+#    ForeverHunter.Shadowstrike.Enable
+#        Description: Shadowstrike and Thunderstrike's ranged procs. With one of the two in the
+#                     main hand, ranged hits (Auto Shot and shots) can proc: Thunderstrike casts
+#                     Chain Lightning on up to 3 targets, Shadowstrike makes your pet drain life
+#                     from the target, healing the pet (if the pet isn't fighting it, you drain it). About
+#                     2 a minute, at most one every 3 seconds. The weapons' stats come from the
+#                     module's SQL and stay with 0; the uninstall SQL puts the items back to stock.
+#        Default:     1
+#
+
+ForeverHunter.Shadowstrike.Enable = 1

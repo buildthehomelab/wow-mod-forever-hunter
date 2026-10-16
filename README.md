@@ -7,6 +7,8 @@ client patch needed.
 - **Lone Wolf**, from WoW Forever: Marksmanship hunters deal 20% more damage without a pet out.
 - **Summon Hawk**, from WoW Forever: Beast Mastery hunters send hawks at their target.
 - **Pet hold**: in a dungeon or raid, a pet in a fight doesn't run off to start a second one.
+- **Shadowstrike and Thunderstrike**: the Molten Core polearm pair becomes a hunter weapon, with
+  Agility and ranged procs.
 
 ## Pet scaling
 
@@ -109,6 +111,32 @@ combat:
 While nobody of the group is fighting nothing changes: you can still pull with the pet.
 Outside dungeons and raids nothing changes either. Only hunter pets are covered.
 
+## Shadowstrike and Thunderstrike
+
+In stock 3.3.5 the polearm pair from Molten Core (17074 and 17223) has no stats at all, only a
+melee proc about twice a minute, and swaps between its two forms on a 60 second cooldown. Rare
+two-handers of the same item level carry 45-55 stat points. Here it becomes a hunter stat stick:
+
+| Form | Stats | Ranged proc |
+|------|-------|-------------|
+| Shadowstrike | +30 Agility, +20 Stamina | Your pet drains 100-180 life from the target and is healed for it. Only a pet already fighting that target does it, so a pet on Passive never picks up threat; otherwise you drain it. |
+| Thunderstrike | +30 Agility, +10 hit rating | Chain Lightning: 150-250 Nature damage to up to 3 targets. |
+
+- The procs come from ranged hits, Auto Shot and shots, instead of melee swings: about 2 a
+  minute, as before, and at most one every 3 seconds, so a Multi-Shot doesn't proc three times.
+- Swapping forms has a 30 second cooldown instead of 60. Thunderstrike is for packs,
+  Shadowstrike keeps the pet up.
+- For scale: Huntsman's Harpoon (blue, item level 61) has +35 Agility; Barb of the Sand Reaver
+  (AQ40) has +41 Agility and +31 Stamina.
+- The procs don't scale with gear, as in stock. The pet's drain gets a little from the pet's
+  spell power, which pets get from your ranged attack power.
+- Chain Lightning's range is raised to 100 yards on the server, so it reaches as far as you shoot.
+
+The procs ride on a hidden server-only aura (90360) every character gets at login, and again when
+equipping either form; it does nothing unless one of the two forms is in the main hand. The
+client doesn't know the aura, so the proc is described in the item's yellow description line. Clients need their item cache
+(`Cache/WDB`) cleared to see the new stats.
+
 ## Requirements
 
 - [AzerothCore](https://github.com/azerothcore/azerothcore-wotlk) `master` (WotLK 3.3.5a)
@@ -153,6 +181,7 @@ Pets that are already out get the bonuses the next time they're summoned.
 | `ForeverHunter.SummonHawk.ManaCostPercent` | `5` | Mana cost as a percentage of base mana. |
 | `ForeverHunter.SummonHawk.AttackPowerPercent` | `30` | Share of the hunter's ranged AP each hawk gets. |
 | `ForeverHunter.PetHold.Enable` | `1` | In a dungeon or raid, while the group is fighting, a pet ignores commands aimed at mobs that aren't in combat. |
+| `ForeverHunter.Shadowstrike.Enable` | `1` | Shadowstrike and Thunderstrike's ranged procs. The stats come from the SQL and stay with `0`. |
 
 ## Turning it off
 
@@ -166,14 +195,16 @@ Change the config and reload it (`.reload config`) or restart:
 - **Summon Hawk:** `ForeverHunter.SummonHawk.Enable = 0`. Within a second of being online,
   hunters lose the spell; hawks already out stay until they expire.
 - **Pet hold:** `ForeverHunter.PetHold.Enable = 0`. Pets go where they're sent again at once.
+- **Shadowstrike and Thunderstrike:** `ForeverHunter.Shadowstrike.Enable = 0` stops the ranged
+  procs at once. The new stats stay until the uninstall SQL puts the items back to stock.
 
 To remove the module for good: set the `Enable` settings to `0` first if you can, so hunters lose
 Summon Hawk as they log in. Then stop the worldserver, delete the module, rebuild, and run both
 uninstall files:
 
 - `data/sql/uninstall/mod_forever_hunter_uninstall_world.sql` on the world database puts the
-  three server-side spells back to the empty stubs AzerothCore ships, and removes the script
-  bindings and the hawk creature.
+  three server-side spells back to the empty stubs AzerothCore ships, removes the script
+  bindings and the hawk creature, and puts Shadowstrike and Thunderstrike back to stock.
 - `data/sql/uninstall/mod_forever_hunter_uninstall_characters.sql` on the characters database
   takes Summon Hawk (Swoop) off every character, their action bars and saved cooldowns. Without
   it, hunters keep an unscripted Swoop that charges them at the target.
@@ -205,6 +236,12 @@ Nothing else is saved on characters or pets.
   to its target, or by standing behind its target next to one.
 - The WoW Forever beta reports the talent also costs a few percent of damage while a pet is out.
   That isn't copied.
+
+- Shadowstrike and Thunderstrike lose their melee procs: they're hunter weapons now. Any class
+  that wields one and shoots a bow, gun or crossbow gets the ranged procs, though.
+- Chain Lightning jumps to nearby enemies, as in stock, so it can break a Freezing Trap or
+  Polymorph next to your target.
+- The Reclaimed and Reinforced versions (49301, 49302, 49496, 49497) are left as they are.
 
 ## Troubleshooting
 
