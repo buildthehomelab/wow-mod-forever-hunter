@@ -6,7 +6,8 @@
 -- the module out of the server for good, so the core doesn't log missing scripts.
 --
 -- Puts 67552, 67562 and 67563 back to the empty stubs AzerothCore ships, removes the script
--- bindings and the Summon Hawk creature, and puts Shadowstrike and Thunderstrike back to stock.
+-- bindings and the Summon Hawk creature, puts Shadowstrike and Thunderstrike back to stock, and
+-- moves Call Stabled Pet back to level 80.
 -- Idempotent: safe to run again.
 
 UPDATE `spell_dbc` SET
@@ -47,3 +48,6 @@ DELETE FROM `spell_proc` WHERE `SpellId` = 90360;
 DELETE FROM `creature_template` WHERE `entry` = 9500300;
 DELETE FROM `creature_template_model` WHERE `CreatureID` = 9500300;
 DELETE FROM `creature_template_movement` WHERE `CreatureId` = 9500300;
+
+-- Call Stabled Pet: back to the stock trainer level, 80.
+UPDATE `trainer_spell` SET `ReqLevel` = 80 WHERE `TrainerId` = 7 AND `SpellId` = 62757;
