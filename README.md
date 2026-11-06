@@ -137,6 +137,13 @@ equipping either form; it does nothing unless one of the two forms is in the mai
 client doesn't know the aura, so the proc is described in the item's yellow description line. Clients need their item cache
 (`Cache/WDB`) cleared to see the new stats.
 
+## Call Stabled Pet at 60
+
+Call Stabled Pet (62757) opens the stable anywhere, so hunters can swap pets without a stable
+master. Stock 3.3.5 trains it at level 80; here the hunter trainer teaches it at **60**, for the
+same 30 gold. Only the trainer row changes: the spell has no level check of its own. Hunters who
+are already 60 or higher can buy it from their trainer at once.
+
 ## Requirements
 
 - [AzerothCore](https://github.com/azerothcore/azerothcore-wotlk) `master` (WotLK 3.3.5a)
@@ -204,7 +211,8 @@ uninstall files:
 
 - `data/sql/uninstall/mod_forever_hunter_uninstall_world.sql` on the world database puts the
   three server-side spells back to the empty stubs AzerothCore ships, removes the script
-  bindings and the hawk creature, and puts Shadowstrike and Thunderstrike back to stock.
+  bindings and the hawk creature, puts Shadowstrike and Thunderstrike back to stock, and moves
+  Call Stabled Pet back to level 80. Hunters who already learned it keep it.
 - `data/sql/uninstall/mod_forever_hunter_uninstall_characters.sql` on the characters database
   takes Summon Hawk (Swoop) off every character, their action bars and saved cooldowns. Without
   it, hunters keep an unscripted Swoop that charges them at the target.
